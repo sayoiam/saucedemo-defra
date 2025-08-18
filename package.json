@@ -1,0 +1,118 @@
+{
+  "name": "saucedemo-cypress-framework",
+  "version": "1.0.0",
+  "description": "Comprehensive Cypress test automation framework with TypeScript, BDD, accessibility, security, and responsive testing for SauceDemo website",
+  "main": "index.js",
+  "scripts": {
+    "test": "cypress run",
+    "test:open": "cypress open",
+    "test:headless": "cypress run --headless",
+    "test:headed": "cypress run --headed",
+    "test:chrome": "cypress run --browser chrome",
+    "test:firefox": "cypress run --browser firefox",
+    "test:edge": "cypress run --browser edge",
+    "test:smoke": "cypress run --env grepTags=@smoke",
+    "test:regression": "cypress run --env grepTags=@regression",
+    "test:accessibility": "cypress run --spec 'cypress/e2e/accessibility.cy.ts,cypress/e2e/features/accessibility.feature'",
+    "test:security": "cypress run --spec 'cypress/e2e/security.cy.ts,cypress/e2e/features/security.feature'",
+    "test:responsive": "cypress run --spec 'cypress/e2e/responsive.cy.ts'",
+    "test:bdd": "cypress run --spec 'cypress/e2e/features/*.feature'",
+    "test:mobile": "cypress run --config viewportWidth=375,viewportHeight=667",
+    "test:tablet": "cypress run --config viewportWidth=768,viewportHeight=1024",
+    "test:desktop": "cypress run --config viewportWidth=1280,viewportHeight=720",
+    "test:parallel": "cypress run --record --parallel",
+    "test:ci": "cypress run --record --key $CYPRESS_RECORD_KEY",
+    "test:debug": "cypress run --headed --no-exit",
+    "test:performance": "cypress run --env grepTags=@performance",
+    "test:critical": "cypress run --env grepTags=@critical",
+    "test:e2e": "cypress run --env grepTags=@e2e",
+    "test:multi-page": "cypress run --env grepTags=@multi-page",
+    "test:negative": "cypress run --env grepTags=@negative",
+    "test:positive": "cypress run --env grepTags=@positive",
+    "test:all-browsers": "npm run test:chrome && npm run test:firefox && npm run test:edge",
+    "test:all-viewports": "npm run test:mobile && npm run test:tablet && npm run test:desktop",
+    "open": "cypress open",
+    "report:open": "npx mochawesome-report-generator cypress/reports/*.json --reportDir cypress/reports --inline",
+    "report:merge": "npx mochawesome-merge cypress/reports/*.json > cypress/reports/merged-report.json && npx marge cypress/reports/merged-report.json --reportDir cypress/reports --inline",
+    "report:clean": "rm -rf cypress/reports/* cypress/screenshots/* cypress/videos/*",
+    "report:generate": "marge cypress/reports/merged-report.json --reportDir cypress/reports --inline",
+    "lint": "npx tsc --noEmit",
+    "lint:fix": "echo 'ESLint not configured'",
+    "format": "echo 'Prettier not configured'",
+    "format:check": "echo 'Prettier not configured'",
+    "type-check": "npx tsc --noEmit",
+    "validate": "npm run type-check",
+    "setup": "npm install && npx cypress verify",
+    "clean": "npm run report:clean && rm -rf node_modules package-lock.json",
+    "reinstall": "npm run clean && npm install",
+    "cy:info": "npx cypress info",
+    "cy:verify": "npx cypress verify",
+    "cy:version": "npx cypress version",
+    "ci": "npm run test && npm run report:merge",
+    "pretest": "npm run validate",
+    "posttest": "npm run report:merge"
+  },
+  "keywords": [
+    "cypress",
+    "typescript",
+    "bdd",
+    "gherkin",
+    "cucumber",
+    "accessibility",
+    "security",
+    "responsive",
+    "page-object-model",
+    "test-automation",
+    "e2e-testing",
+    "saucedemo",
+    "ci-cd",
+    "github-actions"
+  ],
+  "author": "SDET Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@badeball/cypress-cucumber-preprocessor": "^22.2.0",
+    "@bahmutov/cypress-esbuild-preprocessor": "^2.2.5",
+    "@types/node": "^24.3.0",
+    "cypress": "^14.5.4",
+    "cypress-axe": "^1.6.0",
+    "cypress-mochawesome-reporter": "^4.0.0",
+    "cypress-real-events": "^1.14.0",
+    "mochawesome": "^7.1.3",
+    "mochawesome-merge": "^5.0.0",
+    "mochawesome-report-generator": "^6.2.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  },
+  "cypress-cucumber-preprocessor": {
+    "nonGlobalStepDefinitions": false,
+    "stepDefinitions": [
+      "cypress/support/step_definitions/**/*.ts"
+    ],
+    "html": {
+      "enabled": true,
+      "output": "cypress/reports/cucumber-html-report.html"
+    },
+    "json": {
+      "enabled": true,
+      "output": "cypress/reports/cucumber-report.json"
+    },
+    "messages": {
+      "enabled": true,
+      "output": "cypress/reports/cucumber-messages.ndjson"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/saucedemo-cypress-framework.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-org/saucedemo-cypress-framework/issues"
+  },
+  "homepage": "https://github.com/your-org/saucedemo-cypress-framework#readme",
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  }
+}
+

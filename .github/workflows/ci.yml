@@ -1,0 +1,426 @@
+name: SauceDemo Cypress Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      browser:
+        description: 'Browser to run tests on'
+        required: false
+        default: 'chrome'
+        type: choice
+        options:
+          - chrome
+          - firefox
+          - edge
+      test_suite:
+        description: 'Test suite to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - smoke
+          - regression
+          - accessibility
+          - security
+          - responsive
+
+jobs:
+  # Lint and type check
+  lint:
+    name: Lint and Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run TypeScript type check
+        run: npx tsc --noEmit
+
+      - name: Run ESLint (if configured)
+        run: |
+          if [ -f ".eslintrc.js" ] || [ -f ".eslintrc.json" ]; then
+            npx eslint cypress/**/*.ts
+          else
+            echo "ESLint not configured, skipping..."
+          fi
+        continue-on-error: true
+
+  # Smoke tests - quick validation
+  smoke-tests:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    strategy:
+      matrix:
+        browser: [chrome, firefox]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Cypress smoke tests
+        uses: cypress-io/github-action@v6
+        with:
+          browser: ${{ matrix.browser }}
+          spec: |
+            cypress/e2e/**/*.feature
+            cypress/e2e/**/*.cy.ts
+          config: |
+            {
+              "env": {
+                "grepTags": "@smoke"
+              }
+            }
+        env:
+          CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
+
+      - name: Upload smoke test artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-test-artifacts-${{ matrix.browser }}
+          path: |
+            cypress/screenshots
+            cypress/videos
+            cypress/reports
+          retention-days: 7
+
+  # Full regression tests
+  regression-tests:
+    name: Regression Tests
+    runs-on: ubuntu-latest
+    needs: smoke-tests
+    if: github.event_name == 'push' || github.event_name == 'schedule' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'regression'
+    strategy:
+      matrix:
+        browser: [chrome, firefox, edge]
+        viewport: [desktop, tablet, mobile]
+      fail-fast: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set viewport configuration
+        run: |
+          case "${{ matrix.viewport }}" in
+            desktop)
+              echo "CYPRESS_viewportWidth=1280" >> $GITHUB_ENV
+              echo "CYPRESS_viewportHeight=720" >> $GITHUB_ENV
+              ;;
+            tablet)
+              echo "CYPRESS_viewportWidth=768" >> $GITHUB_ENV
+              echo "CYPRESS_viewportHeight=1024" >> $GITHUB_ENV
+              ;;
+            mobile)
+              echo "CYPRESS_viewportWidth=375" >> $GITHUB_ENV
+              echo "CYPRESS_viewportHeight=667" >> $GITHUB_ENV
+              ;;
+          esac
+
+      - name: Run Cypress regression tests
+        uses: cypress-io/github-action@v6
+        with:
+          browser: ${{ matrix.browser }}
+          spec: |
+            cypress/e2e/**/*.feature
+            cypress/e2e/**/*.cy.ts
+          config: |
+            {
+              "env": {
+                "grepTags": "@regression or not @skip"
+              }
+            }
+        env:
+          CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
+
+      - name: Upload regression test artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: regression-test-artifacts-${{ matrix.browser }}-${{ matrix.viewport }}
+          path: |
+            cypress/screenshots
+            cypress/videos
+            cypress/reports
+          retention-days: 14
+
+  # Accessibility tests
+  accessibility-tests:
+    name: Accessibility Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    if: github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'accessibility' || github.event_name == 'schedule'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run accessibility tests
+        uses: cypress-io/github-action@v6
+        with:
+          browser: chrome
+          spec: |
+            cypress/e2e/features/accessibility.feature
+        env:
+          CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
+
+      - name: Generate accessibility report
+        run: |
+          if [ -f "cypress/reports/accessibility-report.json" ]; then
+            echo "Accessibility report generated"
+            cat cypress/reports/accessibility-report.json
+          fi
+
+      - name: Upload accessibility artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: accessibility-test-artifacts
+          path: |
+            cypress/screenshots
+            cypress/videos
+            cypress/reports
+          retention-days: 30
+
+  # Security tests
+  security-tests:
+    name: Security Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    if: github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'security' || github.event_name == 'schedule'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run security tests
+        uses: cypress-io/github-action@v6
+        with:
+          browser: chrome
+          spec: |
+            cypress/e2e/features/security.feature
+        env:
+          CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
+
+      - name: Generate security report
+        run: |
+          if [ -f "cypress/reports/security-report.json" ]; then
+            echo "Security report generated"
+            cat cypress/reports/security-report.json
+          fi
+
+      - name: Upload security artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-test-artifacts
+          path: |
+            cypress/screenshots
+            cypress/videos
+            cypress/reports
+          retention-days: 30
+
+  # Responsive tests
+  responsive-tests:
+    name: Responsive Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    if: github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'responsive' || github.event_name == 'schedule'
+    strategy:
+      matrix:
+        viewport: [mobile, tablet, desktop, large-desktop]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run responsive tests
+        uses: cypress-io/github-action@v6
+        with:
+          browser: chrome
+          spec: cypress/e2e/responsive.cy.ts
+        env:
+          CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
+          CYPRESS_VIEWPORT: ${{ matrix.viewport }}
+
+      - name: Upload responsive artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: responsive-test-artifacts-${{ matrix.viewport }}
+          path: |
+            cypress/screenshots
+            cypress/videos
+            cypress/reports
+          retention-days: 14
+
+  # Generate consolidated report
+  generate-report:
+    name: Generate Test Report
+    runs-on: ubuntu-latest
+    needs: [smoke-tests, regression-tests, accessibility-tests, security-tests, responsive-tests]
+    if: always()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Merge test reports
+        run: |
+          mkdir -p merged-reports
+          find artifacts -name "*.json" -path "*/reports/*" -exec cp {} merged-reports/ \;
+          
+          # Generate consolidated HTML report
+          npm run report:merge || echo "Report merge script not found"
+
+      - name: Generate test summary
+        run: |
+          echo "# Test Execution Summary" > test-summary.md
+          echo "" >> test-summary.md
+          echo "**Date:** $(date)" >> test-summary.md
+          echo "**Commit:** ${{ github.sha }}" >> test-summary.md
+          echo "**Branch:** ${{ github.ref_name }}" >> test-summary.md
+          echo "" >> test-summary.md
+          
+          # Count artifacts to estimate test results
+          SMOKE_ARTIFACTS=$(find artifacts -name "*smoke*" | wc -l)
+          REGRESSION_ARTIFACTS=$(find artifacts -name "*regression*" | wc -l)
+          ACCESSIBILITY_ARTIFACTS=$(find artifacts -name "*accessibility*" | wc -l)
+          SECURITY_ARTIFACTS=$(find artifacts -name "*security*" | wc -l)
+          RESPONSIVE_ARTIFACTS=$(find artifacts -name "*responsive*" | wc -l)
+          
+          echo "## Test Suite Results" >> test-summary.md
+          echo "- Smoke Tests: $SMOKE_ARTIFACTS artifacts" >> test-summary.md
+          echo "- Regression Tests: $REGRESSION_ARTIFACTS artifacts" >> test-summary.md
+          echo "- Accessibility Tests: $ACCESSIBILITY_ARTIFACTS artifacts" >> test-summary.md
+          echo "- Security Tests: $SECURITY_ARTIFACTS artifacts" >> test-summary.md
+          echo "- Responsive Tests: $RESPONSIVE_ARTIFACTS artifacts" >> test-summary.md
+
+      - name: Upload consolidated report
+        uses: actions/upload-artifact@v4
+        with:
+          name: consolidated-test-report
+          path: |
+            merged-reports
+            test-summary.md
+          retention-days: 30
+
+      - name: Comment PR with test results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            if (fs.existsSync('test-summary.md')) {
+              const summary = fs.readFileSync('test-summary.md', 'utf8');
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: summary
+              });
+            }
+
+  # Deploy test results to GitHub Pages (optional)
+  deploy-results:
+    name: Deploy Test Results
+    runs-on: ubuntu-latest
+    needs: generate-report
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download consolidated report
+        uses: actions/download-artifact@v4
+        with:
+          name: consolidated-test-report
+          path: public
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload to Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: Deploy to Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+

@@ -1,0 +1,386 @@
+name: Nightly Tests
+
+on:
+  schedule:
+    # Run every night at 1 AM UTC
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+    inputs:
+      full_suite:
+        description: 'Run full test suite including performance tests'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  # Full comprehensive test suite
+  comprehensive-tests:
+    name: Comprehensive Test Suite
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        browser: [chrome, firefox, edge]
+        user_type: [standard_user, performance_glitch_user, error_user, visual_user]
+      fail-fast: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run comprehensive tests
+        uses: cypress-io/github-action@v6
+        with:
+          browser: ${{ matrix.browser }}
+          spec: |
+            cypress/e2e/**/*.feature
+            cypress/e2e/**/*.cy.ts
+        env:
+          CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
+          CYPRESS_TEST_USER: ${{ matrix.user_type }}
+
+      - name: Upload comprehensive test artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: comprehensive-test-artifacts-${{ matrix.browser }}-${{ matrix.user_type }}
+          path: |
+            cypress/screenshots
+            cypress/videos
+            cypress/reports
+          retention-days: 30
+
+  # Performance monitoring
+  performance-tests:
+    name: Performance Monitoring
+    runs-on: ubuntu-latest
+    if: github.event.inputs.full_suite == 'true' || github.event_name == 'schedule'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run performance tests
+        uses: cypress-io/github-action@v6
+        with:
+          browser: chrome
+          spec: cypress/e2e/**/*.cy.ts
+          config: |
+            {
+              "env": {
+                "grepTags": "@performance"
+              }
+            }
+        env:
+          CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
+
+      - name: Analyze performance metrics
+        run: |
+          if [ -f "cypress/reports/performance-metrics.json" ]; then
+            echo "Performance metrics collected:"
+            cat cypress/reports/performance-metrics.json
+            
+            # Check for performance regressions
+            node -e "
+              const fs = require('fs');
+              if (fs.existsSync('cypress/reports/performance-metrics.json')) {
+                const metrics = JSON.parse(fs.readFileSync('cypress/reports/performance-metrics.json', 'utf8'));
+                
+                // Define performance thresholds
+                const thresholds = {
+                  loadTime: 5000,
+                  renderTime: 3000,
+                  networkTime: 2000
+                };
+                
+                let hasRegressions = false;
+                Object.keys(thresholds).forEach(metric => {
+                  if (metrics[metric] && metrics[metric] > thresholds[metric]) {
+                    console.log(\`❌ Performance regression detected: \${metric} = \${metrics[metric]}ms (threshold: \${thresholds[metric]}ms)\`);
+                    hasRegressions = true;
+                  } else if (metrics[metric]) {
+                    console.log(\`✅ \${metric} = \${metrics[metric]}ms (within threshold)\`);
+                  }
+                });
+                
+                if (hasRegressions) {
+                  process.exit(1);
+                }
+              }
+            "
+
+      - name: Upload performance artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-test-artifacts
+          path: |
+            cypress/screenshots
+            cypress/videos
+            cypress/reports
+          retention-days: 60
+
+  # Cross-browser compatibility tests
+  cross-browser-tests:
+    name: Cross-Browser Compatibility
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        browser: [chrome, firefox, edge]
+        test_type: [login, inventory, cart, checkout]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run cross-browser tests
+        uses: cypress-io/github-action@v6
+        with:
+          browser: ${{ matrix.browser }}
+          spec: cypress/e2e/**/*${{ matrix.test_type }}*.cy.ts
+        env:
+          CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
+
+      - name: Upload cross-browser artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cross-browser-artifacts-${{ matrix.browser }}-${{ matrix.test_type }}
+          path: |
+            cypress/screenshots
+            cypress/videos
+            cypress/reports
+          retention-days: 14
+
+  # Data-driven tests
+  data-driven-tests:
+    name: Data-Driven Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate test data
+        run: |
+          mkdir -p cypress/fixtures/generated
+          node -e "
+            const fs = require('fs');
+            
+            // Generate test users data
+            const users = [
+              { username: 'standard_user', password: 'secret_sauce', type: 'standard' },
+              { username: 'locked_out_user', password: 'secret_sauce', type: 'locked' },
+              { username: 'problem_user', password: 'secret_sauce', type: 'problem' },
+              { username: 'performance_glitch_user', password: 'secret_sauce', type: 'performance' },
+              { username: 'error_user', password: 'secret_sauce', type: 'error' },
+              { username: 'visual_user', password: 'secret_sauce', type: 'visual' }
+            ];
+            
+            // Generate customer data
+            const customers = [];
+            for (let i = 1; i <= 10; i++) {
+              customers.push({
+                firstName: \`TestUser\${i}\`,
+                lastName: \`LastName\${i}\`,
+                postalCode: \`1234\${i}\`
+              });
+            }
+            
+            fs.writeFileSync('cypress/fixtures/generated/users.json', JSON.stringify(users, null, 2));
+            fs.writeFileSync('cypress/fixtures/generated/customers.json', JSON.stringify(customers, null, 2));
+            
+            console.log('Test data generated successfully');
+          "
+
+      - name: Run data-driven tests
+        uses: cypress-io/github-action@v6
+        with:
+          browser: chrome
+          spec: cypress/e2e/features/*.feature
+        env:
+          CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
+
+      - name: Upload data-driven test artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: data-driven-test-artifacts
+          path: |
+            cypress/screenshots
+            cypress/videos
+            cypress/reports
+            cypress/fixtures/generated
+          retention-days: 14
+
+  # Generate nightly report
+  generate-nightly-report:
+    name: Generate Nightly Report
+    runs-on: ubuntu-latest
+    needs: [comprehensive-tests, performance-tests, cross-browser-tests, data-driven-tests]
+    if: always()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: nightly-artifacts
+
+      - name: Generate comprehensive report
+        run: |
+          mkdir -p nightly-reports
+          
+          # Create nightly test summary
+          echo "# Nightly Test Report - $(date)" > nightly-reports/summary.md
+          echo "" >> nightly-reports/summary.md
+          echo "**Execution Date:** $(date)" >> nightly-reports/summary.md
+          echo "**Commit:** ${{ github.sha }}" >> nightly-reports/summary.md
+          echo "**Branch:** ${{ github.ref_name }}" >> nightly-reports/summary.md
+          echo "" >> nightly-reports/summary.md
+          
+          # Count test artifacts
+          COMPREHENSIVE_COUNT=$(find nightly-artifacts -name "*comprehensive*" | wc -l)
+          PERFORMANCE_COUNT=$(find nightly-artifacts -name "*performance*" | wc -l)
+          CROSS_BROWSER_COUNT=$(find nightly-artifacts -name "*cross-browser*" | wc -l)
+          DATA_DRIVEN_COUNT=$(find nightly-artifacts -name "*data-driven*" | wc -l)
+          
+          echo "## Test Execution Summary" >> nightly-reports/summary.md
+          echo "- Comprehensive Tests: $COMPREHENSIVE_COUNT artifacts" >> nightly-reports/summary.md
+          echo "- Performance Tests: $PERFORMANCE_COUNT artifacts" >> nightly-reports/summary.md
+          echo "- Cross-Browser Tests: $CROSS_BROWSER_COUNT artifacts" >> nightly-reports/summary.md
+          echo "- Data-Driven Tests: $DATA_DRIVEN_COUNT artifacts" >> nightly-reports/summary.md
+          echo "" >> nightly-reports/summary.md
+          
+          # Check for failures
+          FAILURE_COUNT=$(find nightly-artifacts -name "*failure*" -o -name "*error*" | wc -l)
+          if [ $FAILURE_COUNT -gt 0 ]; then
+            echo "⚠️ **$FAILURE_COUNT potential failures detected**" >> nightly-reports/summary.md
+          else
+            echo "✅ **No obvious failures detected**" >> nightly-reports/summary.md
+          fi
+          
+          # Performance analysis
+          if [ -f "nightly-artifacts/performance-test-artifacts/cypress/reports/performance-metrics.json" ]; then
+            echo "" >> nightly-reports/summary.md
+            echo "## Performance Metrics" >> nightly-reports/summary.md
+            echo "\`\`\`json" >> nightly-reports/summary.md
+            cat nightly-artifacts/performance-test-artifacts/cypress/reports/performance-metrics.json >> nightly-reports/summary.md
+            echo "\`\`\`" >> nightly-reports/summary.md
+          fi
+
+      - name: Upload nightly report
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-test-report
+          path: nightly-reports
+          retention-days: 90
+
+      - name: Send notification on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const run_id = context.runId;
+            const run_url = \`https://github.com/\${owner}/\${repo}/actions/runs/\${run_id}\`;
+            
+            // Create an issue for nightly test failures
+            await github.rest.issues.create({
+              owner,
+              repo,
+              title: \`Nightly Tests Failed - \${new Date().toISOString().split('T')[0]}\`,
+              body: \`
+              ## Nightly Test Failure Report
+              
+              **Date:** \${new Date().toISOString()}
+              **Workflow Run:** [View Details](\${run_url})
+              **Commit:** \${{ github.sha }}
+              
+              The nightly test suite has failed. Please investigate the issues and fix them.
+              
+              ### Next Steps:
+              1. Review the workflow logs
+              2. Check the test artifacts
+              3. Fix any identified issues
+              4. Re-run the tests to verify fixes
+              \`,
+              labels: ['bug', 'nightly-tests', 'automated']
+            });
+
+  # Cleanup old artifacts
+  cleanup:
+    name: Cleanup Old Artifacts
+    runs-on: ubuntu-latest
+    needs: generate-nightly-report
+    if: always()
+    steps:
+      - name: Delete old artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            
+            // Get all artifacts older than 30 days
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            
+            const artifacts = await github.rest.actions.listArtifactsForRepo({
+              owner,
+              repo,
+              per_page: 100
+            });
+            
+            for (const artifact of artifacts.data.artifacts) {
+              const createdAt = new Date(artifact.created_at);
+              if (createdAt < thirtyDaysAgo) {
+                console.log(\`Deleting old artifact: \${artifact.name} (created: \${artifact.created_at})\`);
+                await github.rest.actions.deleteArtifact({
+                  owner,
+                  repo,
+                  artifact_id: artifact.id
+                });
+              }
+            }
+
