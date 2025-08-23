@@ -13,6 +13,7 @@ export default defineConfig({
     responseTimeout: 10000,
     pageLoadTimeout: 30000,
     video: true,
+    videoCompression: false,
     screenshotOnRunFailure: true,
     screenshotsFolder: 'cypress/screenshots',
     videosFolder: 'cypress/videos',
