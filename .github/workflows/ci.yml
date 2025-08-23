@@ -37,7 +37,7 @@ jobs:
   lint:
     name: Lint and Type Check
     runs-on: ubuntu-latest
-    continue-on-error: true  # Don't fail the workflow if linting fails
+    continue-on-error: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -66,11 +66,13 @@ jobs:
   smoke-tests:
     name: Smoke Tests
     runs-on: ubuntu-latest
-    continue-on-error: true  # Don't fail the workflow if smoke tests fail
+    continue-on-error: true
+    # Only skip if manual dispatch specifically excludes smoke tests
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'smoke'
     strategy:
       matrix:
         browser: [chrome, firefox]
-      fail-fast: false  # Continue with other browsers even if one fails
+      fail-fast: false
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -99,11 +101,11 @@ jobs:
             }
         env:
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
-        continue-on-error: true  # Continue even if tests fail
+        continue-on-error: true
 
       - name: Upload smoke test artifacts
         uses: actions/upload-artifact@v4
-        if: always()  # Always upload artifacts, even on failure
+        if: always()
         with:
           name: smoke-test-artifacts-${{ matrix.browser }}
           path: |
@@ -112,17 +114,18 @@ jobs:
             cypress/reports
           retention-days: 7
 
-  # Regression tests - runs independently (no dependency on smoke tests)
+  # Regression tests - runs independently
   regression-tests:
     name: Regression Tests
     runs-on: ubuntu-latest
-    continue-on-error: true  # Don't fail the workflow if regression tests fail
-    if: github.event_name == 'push' || github.event_name == 'schedule' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'regression'
+    continue-on-error: true
+    # Only skip if manual dispatch specifically excludes regression tests
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'regression'
     strategy:
       matrix:
         browser: [chrome, firefox, edge]
         viewport: [desktop, tablet, mobile]
-      fail-fast: false  # Continue with other combinations even if one fails
+      fail-fast: false
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -168,11 +171,11 @@ jobs:
             }
         env:
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
-        continue-on-error: true  # Continue even if tests fail
+        continue-on-error: true
 
       - name: Upload regression test artifacts
         uses: actions/upload-artifact@v4
-        if: always()  # Always upload artifacts, even on failure
+        if: always()
         with:
           name: regression-test-artifacts-${{ matrix.browser }}-${{ matrix.viewport }}
           path: |
@@ -181,12 +184,13 @@ jobs:
             cypress/reports
           retention-days: 14
 
-  # Accessibility tests - runs independently
+  # Accessibility tests - NOW ALWAYS RUNS (fixed condition)
   accessibility-tests:
     name: Accessibility Tests
     runs-on: ubuntu-latest
-    continue-on-error: true  # Don't fail the workflow if accessibility tests fail
-    if: github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'accessibility' || github.event_name == 'schedule'
+    continue-on-error: true
+    # Fixed: Now runs on push/PR, only skips if manual dispatch specifically excludes it
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'accessibility'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -208,7 +212,7 @@ jobs:
             cypress/e2e/features/accessibility.feature
         env:
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
-        continue-on-error: true  # Continue even if tests fail
+        continue-on-error: true
 
       - name: Generate accessibility report
         run: |
@@ -220,7 +224,7 @@ jobs:
 
       - name: Upload accessibility artifacts
         uses: actions/upload-artifact@v4
-        if: always()  # Always upload artifacts, even on failure
+        if: always()
         with:
           name: accessibility-test-artifacts
           path: |
@@ -229,12 +233,13 @@ jobs:
             cypress/reports
           retention-days: 30
 
-  # Security tests - runs independently
+  # Security tests - NOW ALWAYS RUNS (fixed condition)
   security-tests:
     name: Security Tests
     runs-on: ubuntu-latest
-    continue-on-error: true  # Don't fail the workflow if security tests fail
-    if: github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'security' || github.event_name == 'schedule'
+    continue-on-error: true
+    # Fixed: Now runs on push/PR, only skips if manual dispatch specifically excludes it
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'security'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -256,7 +261,7 @@ jobs:
             cypress/e2e/features/security.feature
         env:
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
-        continue-on-error: true  # Continue even if tests fail
+        continue-on-error: true
 
       - name: Generate security report
         run: |
@@ -268,7 +273,7 @@ jobs:
 
       - name: Upload security artifacts
         uses: actions/upload-artifact@v4
-        if: always()  # Always upload artifacts, even on failure
+        if: always()
         with:
           name: security-test-artifacts
           path: |
@@ -277,16 +282,17 @@ jobs:
             cypress/reports
           retention-days: 30
 
-  # Responsive tests - runs independently
+  # Responsive tests - NOW ALWAYS RUNS (fixed condition)
   responsive-tests:
     name: Responsive Tests
     runs-on: ubuntu-latest
-    continue-on-error: true  # Don't fail the workflow if responsive tests fail
-    if: github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'responsive' || github.event_name == 'schedule'
+    continue-on-error: true
+    # Fixed: Now runs on push/PR, only skips if manual dispatch specifically excludes it
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'responsive'
     strategy:
       matrix:
         viewport: [mobile, tablet, desktop, large-desktop]
-      fail-fast: false  # Continue with other viewports even if one fails
+      fail-fast: false
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -308,11 +314,11 @@ jobs:
         env:
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
           CYPRESS_VIEWPORT: ${{ matrix.viewport }}
-        continue-on-error: true  # Continue even if tests fail
+        continue-on-error: true
 
       - name: Upload responsive artifacts
         uses: actions/upload-artifact@v4
-        if: always()  # Always upload artifacts, even on failure
+        if: always()
         with:
           name: responsive-test-artifacts-${{ matrix.viewport }}
           path: |
@@ -325,9 +331,8 @@ jobs:
   generate-report:
     name: Generate Test Report
     runs-on: ubuntu-latest
-    # Changed: Now depends on all jobs but uses 'always()' to run even if they fail
     needs: [lint, smoke-tests, regression-tests, accessibility-tests, security-tests, responsive-tests]
-    if: always()  # Always run, regardless of test results
+    if: always()
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -344,7 +349,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-        continue-on-error: true  # Continue even if some artifacts are missing
+        continue-on-error: true
 
       - name: Merge test reports
         run: |
@@ -453,7 +458,7 @@ jobs:
     name: Workflow Summary
     runs-on: ubuntu-latest
     needs: [lint, smoke-tests, regression-tests, accessibility-tests, security-tests, responsive-tests]
-    if: always()  # Always run to provide summary
+    if: always()
     steps:
       - name: Generate workflow summary
         run: |
