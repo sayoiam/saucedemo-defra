@@ -66,7 +66,7 @@ jobs:
     name: Smoke Tests
     runs-on: ubuntu-latest
     # Removed continue-on-error: true - smoke test failures should fail the workflow
-    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'smoke'
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'smoke'
     strategy:
       matrix:
         browser: [chrome, firefox]
@@ -117,7 +117,7 @@ jobs:
     name: Regression Tests
     runs-on: ubuntu-latest
     # Removed continue-on-error: true - regression test failures should fail the workflow
-    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'regression'
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'regression'
     strategy:
       matrix:
         browser: [chrome, firefox, edge]
@@ -186,7 +186,7 @@ jobs:
     name: Accessibility Tests
     runs-on: ubuntu-latest
     # Removed continue-on-error: true - accessibility failures should fail the workflow
-    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'accessibility'
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'accessibility'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -233,7 +233,7 @@ jobs:
     name: Security Tests
     runs-on: ubuntu-latest
     # Removed continue-on-error: true - security failures should fail the workflow
-    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'security'
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'security'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -280,7 +280,7 @@ jobs:
     name: Responsive Tests
     runs-on: ubuntu-latest
     # Removed continue-on-error: true - responsive failures should fail the workflow
-    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'responsive'
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'responsive'
     strategy:
       matrix:
         viewport: [mobile, tablet, desktop, large-desktop]
