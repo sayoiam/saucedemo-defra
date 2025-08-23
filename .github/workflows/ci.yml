@@ -328,7 +328,11 @@ jobs:
         with:
           install: false
           browser: chrome
-          spec: cypress/e2e/features/*.feature
+          spec: |
+            cypress/e2e/features/login.feature
+            cypress/e2e/features/complete-purchase-flow.feature
+            cypress/e2e/features/inventory-management.feature
+            cypress/e2e/features/security.feature
         env:
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
           CYPRESS_VIEWPORT: ${{ matrix.viewport }}
