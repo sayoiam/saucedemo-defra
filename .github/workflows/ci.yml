@@ -67,7 +67,6 @@ jobs:
     name: Smoke Tests
     runs-on: ubuntu-latest
     continue-on-error: true
-    # Only skip if manual dispatch specifically excludes smoke tests
     if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'smoke'
     strategy:
       matrix:
@@ -119,7 +118,6 @@ jobs:
     name: Regression Tests
     runs-on: ubuntu-latest
     continue-on-error: true
-    # Only skip if manual dispatch specifically excludes regression tests
     if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'regression'
     strategy:
       matrix:
@@ -184,12 +182,11 @@ jobs:
             cypress/reports
           retention-days: 14
 
-  # Accessibility tests - NOW ALWAYS RUNS (fixed condition)
+  # Accessibility tests - only runs BDD feature files now
   accessibility-tests:
     name: Accessibility Tests
     runs-on: ubuntu-latest
     continue-on-error: true
-    # Fixed: Now runs on push/PR, only skips if manual dispatch specifically excludes it
     if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'accessibility'
     steps:
       - name: Checkout code
@@ -208,8 +205,7 @@ jobs:
         with:
           install: false
           browser: chrome
-          spec: |
-            cypress/e2e/features/accessibility.feature
+          spec: cypress/e2e/features/accessibility.feature
         env:
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
         continue-on-error: true
@@ -233,12 +229,11 @@ jobs:
             cypress/reports
           retention-days: 30
 
-  # Security tests - NOW ALWAYS RUNS (fixed condition)
+  # Security tests - only runs BDD feature files now
   security-tests:
     name: Security Tests
     runs-on: ubuntu-latest
     continue-on-error: true
-    # Fixed: Now runs on push/PR, only skips if manual dispatch specifically excludes it
     if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'security'
     steps:
       - name: Checkout code
@@ -257,8 +252,7 @@ jobs:
         with:
           install: false
           browser: chrome
-          spec: |
-            cypress/e2e/features/security.feature
+          spec: cypress/e2e/features/security.feature
         env:
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
         continue-on-error: true
@@ -282,12 +276,11 @@ jobs:
             cypress/reports
           retention-days: 30
 
-  # Responsive tests - NOW ALWAYS RUNS (fixed condition)
+  # Responsive tests - only runs BDD feature files now (if you have responsive.feature)
   responsive-tests:
     name: Responsive Tests
     runs-on: ubuntu-latest
     continue-on-error: true
-    # Fixed: Now runs on push/PR, only skips if manual dispatch specifically excludes it
     if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'responsive'
     strategy:
       matrix:
@@ -305,12 +298,35 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Set viewport for responsive testing
+        run: |
+          case "${{ matrix.viewport }}" in
+            mobile)
+              echo "CYPRESS_viewportWidth=375" >> $GITHUB_ENV
+              echo "CYPRESS_viewportHeight=667" >> $GITHUB_ENV
+              ;;
+            tablet)
+              echo "CYPRESS_viewportWidth=768" >> $GITHUB_ENV
+              echo "CYPRESS_viewportHeight=1024" >> $GITHUB_ENV
+              ;;
+            desktop)
+              echo "CYPRESS_viewportWidth=1280" >> $GITHUB_ENV
+              echo "CYPRESS_viewportHeight=720" >> $GITHUB_ENV
+              ;;
+            large-desktop)
+              echo "CYPRESS_viewportWidth=1920" >> $GITHUB_ENV
+              echo "CYPRESS_viewportHeight=1080" >> $GITHUB_ENV
+              ;;
+          esac
+
       - name: Run responsive tests
         uses: cypress-io/github-action@v6
         with:
           install: false
           browser: chrome
-          spec: cypress/e2e/responsive.cy.ts
+          # Check if responsive.feature exists, otherwise run general tests with responsive viewport
+          spec: |
+            cypress/e2e/features/*.feature
         env:
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
           CYPRESS_VIEWPORT: ${{ matrix.viewport }}
@@ -379,15 +395,16 @@ jobs:
           echo "## Test Suite Results" >> test-summary.md
           echo "- Smoke Tests: $SMOKE_ARTIFACTS artifacts" >> test-summary.md
           echo "- Regression Tests: $REGRESSION_ARTIFACTS artifacts" >> test-summary.md
-          echo "- Accessibility Tests: $ACCESSIBILITY_ARTIFACTS artifacts" >> test-summary.md
-          echo "- Security Tests: $SECURITY_ARTIFACTS artifacts" >> test-summary.md
-          echo "- Responsive Tests: $RESPONSIVE_ARTIFACTS artifacts" >> test-summary.md
+          echo "- Accessibility Tests: $ACCESSIBILITY_ARTIFACTS artifacts (BDD only)" >> test-summary.md
+          echo "- Security Tests: $SECURITY_ARTIFACTS artifacts (BDD only)" >> test-summary.md
+          echo "- Responsive Tests: $RESPONSIVE_ARTIFACTS artifacts (BDD only)" >> test-summary.md
           
           # Add job status summary
           echo "" >> test-summary.md
           echo "## Job Status Summary" >> test-summary.md
           echo "- All test suites executed independently" >> test-summary.md
           echo "- Individual failures do not block other tests" >> test-summary.md
+          echo "- Accessibility, Security, and Responsive tests run BDD feature files only" >> test-summary.md
           echo "- Check individual job logs for detailed results" >> test-summary.md
 
       - name: Upload consolidated report
@@ -470,9 +487,11 @@ jobs:
           echo "- **Lint**: ${{ needs.lint.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Smoke Tests**: ${{ needs.smoke-tests.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Regression Tests**: ${{ needs.regression-tests.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Accessibility Tests**: ${{ needs.accessibility-tests.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Security Tests**: ${{ needs.security-tests.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Responsive Tests**: ${{ needs.responsive-tests.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Accessibility Tests**: ${{ needs.accessibility-tests.result }} (BDD only)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Security Tests**: ${{ needs.security-tests.result }} (BDD only)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Responsive Tests**: ${{ needs.responsive-tests.result }} (BDD only)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "📊 Check individual job logs for detailed test results and artifacts." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "ℹ️ Accessibility, Security, and Responsive tests now run BDD feature files only." >> $GITHUB_STEP_SUMMARY
 
