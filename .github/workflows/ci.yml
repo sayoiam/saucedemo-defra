@@ -37,7 +37,6 @@ jobs:
   lint:
     name: Lint and Type Check
     runs-on: ubuntu-latest
-    # Removed continue-on-error: true - linting failures should fail the workflow
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -65,12 +64,11 @@ jobs:
   smoke-tests:
     name: Smoke Tests
     runs-on: ubuntu-latest
-    # Removed continue-on-error: true - smoke test failures should fail the workflow
     if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'smoke'
     strategy:
       matrix:
         browser: [chrome, firefox]
-      fail-fast: false  # Keep this - allows other browser combinations to continue
+      fail-fast: false
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -101,11 +99,10 @@ jobs:
             }
         env:
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
-        # Removed continue-on-error: true - test failures should fail the job
 
       - name: Upload smoke test artifacts
         uses: actions/upload-artifact@v4
-        if: always()  # Always upload artifacts, even on failure
+        if: always()
         with:
           name: smoke-test-artifacts-${{ matrix.browser }}
           path: |
@@ -118,13 +115,12 @@ jobs:
   regression-tests:
     name: Regression Tests
     runs-on: ubuntu-latest
-    # Removed continue-on-error: true - regression test failures should fail the workflow
     if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'regression'
     strategy:
       matrix:
         browser: [chrome, firefox, edge]
         viewport: [desktop, tablet, mobile]
-      fail-fast: false  # Keep this - allows other combinations to continue
+      fail-fast: false
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -173,11 +169,10 @@ jobs:
             }
         env:
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
-        # Removed continue-on-error: true - test failures should fail the job
 
       - name: Upload regression test artifacts
         uses: actions/upload-artifact@v4
-        if: always()  # Always upload artifacts, even on failure
+        if: always()
         with:
           name: regression-test-artifacts-${{ matrix.browser }}-${{ matrix.viewport }}
           path: |
@@ -186,11 +181,10 @@ jobs:
             cypress/reports
           retention-days: 14
 
-  # Accessibility tests - NOW PROPERLY FAILS when tests fail
+  # Accessibility tests - dedicated job
   accessibility-tests:
     name: Accessibility Tests
     runs-on: ubuntu-latest
-    # Removed continue-on-error: true - accessibility failures should fail the workflow
     if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'accessibility'
     steps:
       - name: Checkout code
@@ -212,7 +206,6 @@ jobs:
           spec: cypress/e2e/features/accessibility.feature
         env:
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
-        # Removed continue-on-error: true - test failures should fail the job
 
       - name: Generate accessibility report
         run: |
@@ -220,11 +213,11 @@ jobs:
             echo "Accessibility report generated"
             cat cypress/reports/accessibility-report.json
           fi
-        continue-on-error: true  # Keep this for report generation only
+        continue-on-error: true
 
       - name: Upload accessibility artifacts
         uses: actions/upload-artifact@v4
-        if: always()  # Always upload artifacts, even on failure
+        if: always()
         with:
           name: accessibility-test-artifacts
           path: |
@@ -233,11 +226,10 @@ jobs:
             cypress/reports
           retention-days: 30
 
-  # Security tests - NOW PROPERLY FAILS when tests fail
+  # Security tests - dedicated job
   security-tests:
     name: Security Tests
     runs-on: ubuntu-latest
-    # Removed continue-on-error: true - security failures should fail the workflow
     if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'security'
     steps:
       - name: Checkout code
@@ -259,7 +251,6 @@ jobs:
           spec: cypress/e2e/features/security.feature
         env:
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
-        # Removed continue-on-error: true - test failures should fail the job
 
       - name: Generate security report
         run: |
@@ -267,11 +258,11 @@ jobs:
             echo "Security report generated"
             cat cypress/reports/security-report.json
           fi
-        continue-on-error: true  # Keep this for report generation only
+        continue-on-error: true
 
       - name: Upload security artifacts
         uses: actions/upload-artifact@v4
-        if: always()  # Always upload artifacts, even on failure
+        if: always()
         with:
           name: security-test-artifacts
           path: |
@@ -280,16 +271,15 @@ jobs:
             cypress/reports
           retention-days: 30
 
-  # Responsive tests - NOW PROPERLY FAILS when tests fail
+  # Responsive tests - dedicated job
   responsive-tests:
     name: Responsive Tests
     runs-on: ubuntu-latest
-    # Removed continue-on-error: true - responsive failures should fail the workflow
     if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'responsive'
     strategy:
       matrix:
         viewport: [mobile, tablet, desktop, large-desktop]
-      fail-fast: false  # Keep this - allows other viewports to continue
+      fail-fast: false
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -336,11 +326,10 @@ jobs:
         env:
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
           CYPRESS_VIEWPORT: ${{ matrix.viewport }}
-        # Removed continue-on-error: true - test failures should fail the job
 
       - name: Upload responsive artifacts
         uses: actions/upload-artifact@v4
-        if: always()  # Always upload artifacts, even on failure
+        if: always()
         with:
           name: responsive-test-artifacts-${{ matrix.viewport }}
           path: |
@@ -354,7 +343,7 @@ jobs:
     name: Generate Test Report
     runs-on: ubuntu-latest
     needs: [lint, smoke-tests, regression-tests, accessibility-tests, security-tests, responsive-tests]
-    if: always()  # Always run to generate reports, even if tests fail
+    if: always()
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -371,7 +360,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-        continue-on-error: true  # Continue even if some artifacts are missing
+        continue-on-error: true
 
       - name: Merge test reports
         run: |
@@ -380,7 +369,7 @@ jobs:
           
           # Generate consolidated HTML report
           npm run report:merge || echo "Report merge script not found"
-        continue-on-error: true  # Continue even if report generation fails
+        continue-on-error: true
 
       - name: Generate test summary
         run: |
@@ -414,8 +403,6 @@ jobs:
           echo "- Accessibility Tests: $ACCESSIBILITY_ARTIFACTS artifacts" >> test-summary.md
           echo "- Security Tests: $SECURITY_ARTIFACTS artifacts" >> test-summary.md
           echo "- Responsive Tests: $RESPONSIVE_ARTIFACTS artifacts" >> test-summary.md
-          echo "" >> test-summary.md
-          echo "ℹ️ **Note**: Test jobs now properly fail when tests fail, providing accurate workflow status." >> test-summary.md
 
       - name: Upload consolidated report
         uses: actions/upload-artifact@v4
@@ -444,7 +431,7 @@ jobs:
             }
         continue-on-error: true
 
-  # Deploy test results to GitHub Pages - runs regardless of test results
+  # Deploy test results to GitHub Pages - with optional deployment
   deploy-results:
     name: Deploy Test Results
     runs-on: ubuntu-latest
@@ -463,31 +450,62 @@ jobs:
         with:
           name: consolidated-test-report
           path: public
+        continue-on-error: true
+
+      - name: Check if GitHub Pages is enabled
+        id: pages-check
+        run: |
+          # Try to get Pages info to see if it's enabled
+          if curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+             -H "Accept: application/vnd.github.v3+json" \
+             "https://api.github.com/repos/${{ github.repository }}/pages" | grep -q "html_url"; then
+            echo "pages_enabled=true" >> $GITHUB_OUTPUT
+            echo "✅ GitHub Pages is enabled"
+          else
+            echo "pages_enabled=false" >> $GITHUB_OUTPUT
+            echo "⚠️ GitHub Pages is not enabled - skipping deployment"
+            echo "💡 To enable: Repository Settings → Pages → Source: GitHub Actions"
+          fi
+        continue-on-error: true
 
       - name: Setup Pages
+        if: steps.pages-check.outputs.pages_enabled == 'true'
         uses: actions/configure-pages@v4
 
       - name: Upload to Pages
+        if: steps.pages-check.outputs.pages_enabled == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: public
 
       - name: Deploy to Pages
+        if: steps.pages-check.outputs.pages_enabled == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Pages deployment summary
+        run: |
+          if [ "${{ steps.pages-check.outputs.pages_enabled }}" == "true" ]; then
+            echo "✅ Reports deployed to GitHub Pages"
+            echo "📄 URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+            echo "🔗 Direct link will be available in a few minutes"
+          else
+            echo "⚠️ GitHub Pages not enabled - reports available as artifacts only"
+            echo "📦 Download 'consolidated-test-report' artifact to view reports"
+            echo "💡 To enable Pages: Repository Settings → Pages → Source: GitHub Actions"
+            echo "🔧 Or set ENABLE_PAGES_DEPLOYMENT=false to disable this job"
+          fi
 
   # Summary job to provide overall workflow status
   workflow-summary:
     name: Workflow Summary
     runs-on: ubuntu-latest
-    needs: [lint, smoke-tests, regression-tests, accessibility-tests, security-tests, responsive-tests]
-    if: always()  # Always run to provide summary
+    needs: [lint, smoke-tests, regression-tests, accessibility-tests, security-tests, responsive-tests, deploy-results]
+    if: always()
     steps:
       - name: Generate workflow summary
         run: |
           echo "## 🎯 Workflow Execution Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Jobs now properly fail when tests fail, providing accurate workflow status." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Job Results:" >> $GITHUB_STEP_SUMMARY
           echo "- **Lint**: ${{ needs.lint.result }}" >> $GITHUB_STEP_SUMMARY
@@ -496,12 +514,28 @@ jobs:
           echo "- **Accessibility Tests**: ${{ needs.accessibility-tests.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Security Tests**: ${{ needs.security-tests.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Responsive Tests**: ${{ needs.responsive-tests.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deploy Results**: ${{ needs.deploy-results.result }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "📊 Check individual job logs for detailed test results and artifacts." >> $GITHUB_STEP_SUMMARY
           
-          # Check if any job failed and add warning
-          if [[ "${{ needs.lint.result }}" == "failure" || "${{ needs.smoke-tests.result }}" == "failure" || "${{ needs.regression-tests.result }}" == "failure" || "${{ needs.accessibility-tests.result }}" == "failure" || "${{ needs.security-tests.result }}" == "failure" || "${{ needs.responsive-tests.result }}" == "failure" ]]; then
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "⚠️ **One or more test jobs failed. Check the failed jobs for details.**" >> $GITHUB_STEP_SUMMARY
+          # Determine overall status
+          if [[ "${{ needs.lint.result }}" == "success" && 
+                "${{ needs.smoke-tests.result }}" == "success" && 
+                "${{ needs.regression-tests.result }}" == "success" && 
+                "${{ needs.accessibility-tests.result }}" == "success" && 
+                "${{ needs.security-tests.result }}" == "success" && 
+                "${{ needs.responsive-tests.result }}" == "success" ]]; then
+            echo "### ✅ Overall Status: SUCCESS" >> $GITHUB_STEP_SUMMARY
+            echo "All test suites passed successfully!" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ Overall Status: SOME FAILURES" >> $GITHUB_STEP_SUMMARY
+            echo "One or more test suites failed. Check individual job results above." >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Reports:" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ needs.deploy-results.result }}" == "success" ]]; then
+            echo "- 🌐 **GitHub Pages**: Available at https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- 📦 **Artifacts**: Download 'consolidated-test-report' from this workflow run" >> $GITHUB_STEP_SUMMARY
           fi
 
