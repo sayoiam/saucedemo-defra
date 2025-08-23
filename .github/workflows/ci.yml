@@ -463,22 +463,18 @@ jobs:
         with:
           name: consolidated-test-report
           path: public
-        continue-on-error: true
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
-        continue-on-error: true
 
       - name: Upload to Pages
         uses: actions/upload-pages-artifact@v3
         with:
           path: public
-        continue-on-error: true
 
       - name: Deploy to Pages
         id: deployment
         uses: actions/deploy-pages@v4
-        continue-on-error: true
 
   # Summary job to provide overall workflow status
   workflow-summary:
@@ -508,3 +504,4 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "⚠️ **One or more test jobs failed. Check the failed jobs for details.**" >> $GITHUB_STEP_SUMMARY
           fi
+
