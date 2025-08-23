@@ -85,6 +85,7 @@ jobs:
       - name: Run Cypress smoke tests
         uses: cypress-io/github-action@v6
         with:
+          install: false
           browser: ${{ matrix.browser }}
           spec: |
             cypress/e2e/**/*.feature
