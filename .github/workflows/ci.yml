@@ -66,7 +66,7 @@ jobs:
     name: Smoke Tests
     runs-on: ubuntu-latest
     # Removed continue-on-error: true - smoke test failures should fail the workflow
-    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'smoke'
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'smoke'
     strategy:
       matrix:
         browser: [chrome, firefox]
@@ -89,8 +89,10 @@ jobs:
           install: false
           browser: ${{ matrix.browser }}
           spec: |
-            cypress/e2e/**/*.feature
-            cypress/e2e/**/*.cy.ts
+            cypress/e2e/features/login.feature
+            cypress/e2e/features/complete-purchase-flow.feature
+            cypress/e2e/features/inventory-management.feature
+            cypress/e2e/complete-purchase-flow.cy.ts
           config: |
             {
               "env": {
@@ -117,7 +119,7 @@ jobs:
     name: Regression Tests
     runs-on: ubuntu-latest
     # Removed continue-on-error: true - regression test failures should fail the workflow
-    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'regression'
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'regression'
     strategy:
       matrix:
         browser: [chrome, firefox, edge]
@@ -158,8 +160,11 @@ jobs:
           install: false
           browser: ${{ matrix.browser }}
           spec: |
-            cypress/e2e/**/*.feature
-            cypress/e2e/**/*.cy.ts
+            cypress/e2e/features/login.feature
+            cypress/e2e/features/complete-purchase-flow.feature
+            cypress/e2e/features/inventory-management.feature
+            cypress/e2e/features/security.feature
+            cypress/e2e/complete-purchase-flow.cy.ts
           config: |
             {
               "env": {
@@ -186,7 +191,7 @@ jobs:
     name: Accessibility Tests
     runs-on: ubuntu-latest
     # Removed continue-on-error: true - accessibility failures should fail the workflow
-    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'accessibility'
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'accessibility'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -233,7 +238,7 @@ jobs:
     name: Security Tests
     runs-on: ubuntu-latest
     # Removed continue-on-error: true - security failures should fail the workflow
-    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'security'
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'security'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -280,7 +285,7 @@ jobs:
     name: Responsive Tests
     runs-on: ubuntu-latest
     # Removed continue-on-error: true - responsive failures should fail the workflow
-    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'responsive'
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'responsive'
     strategy:
       matrix:
         viewport: [mobile, tablet, desktop, large-desktop]
@@ -499,4 +504,3 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "⚠️ **One or more test jobs failed. Check the failed jobs for details.**" >> $GITHUB_STEP_SUMMARY
           fi
-
