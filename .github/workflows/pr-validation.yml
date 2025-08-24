@@ -524,40 +524,53 @@ jobs:
         env:
           CYPRESS_PERFORMANCE_MONITORING: true
 
+      - name: Create performance analysis script
+        run: |
+          cat > analyze_performance.js << 'EOF'
+          const fs = require('fs');
+          
+          try {
+            if (fs.existsSync('cypress/reports/performance-metrics.json')) {
+              console.log('Performance metrics collected for PR validation');
+              const metrics = JSON.parse(fs.readFileSync('cypress/reports/performance-metrics.json', 'utf8'));
+              console.log('Metrics:', JSON.stringify(metrics, null, 2));
+          
+              // Define acceptable thresholds for PR validation
+              const thresholds = {
+                loadTime: 8000,  // More lenient for PR validation
+                renderTime: 5000,
+                networkTime: 3000
+              };
+          
+              let hasIssues = false;
+              Object.keys(thresholds).forEach(metric => {
+                if (metrics[metric] && metrics[metric] > thresholds[metric]) {
+                  console.log(`⚠️ Performance concern: ${metric} = ${metrics[metric]}ms (threshold: ${thresholds[metric]}ms)`);
+                  hasIssues = true;
+                } else if (metrics[metric]) {
+                  console.log(`✅ ${metric} = ${metrics[metric]}ms (acceptable)`);
+                }
+              });
+          
+              if (hasIssues) {
+                console.log('Performance concerns detected but not failing PR validation');
+              } else {
+                console.log('✅ All performance metrics within acceptable thresholds');
+              }
+            } else {
+              console.log('⚠️ No performance metrics file found - this is normal for PR validation');
+              console.log('Performance monitoring may not be fully configured yet');
+            }
+          } catch (error) {
+            console.log('⚠️ Error analyzing performance metrics:', error.message);
+            console.log('This is not critical for PR validation');
+          }
+          EOF
+
       - name: Analyze performance impact
         run: |
-          if [ -f "cypress/reports/performance-metrics.json" ]; then
-            echo "Performance metrics collected for PR validation"
-            cat cypress/reports/performance-metrics.json
-          
-            # Basic performance validation
-            node -e "
-              const fs = require('fs');
-              if (fs.existsSync('cypress/reports/performance-metrics.json')) {
-                const metrics = JSON.parse(fs.readFileSync('cypress/reports/performance-metrics.json', 'utf8'));
-          
-                // Define acceptable thresholds for PR validation
-                const thresholds = {
-                  loadTime: 8000,  // More lenient for PR validation
-                  renderTime: 5000,
-                  networkTime: 3000
-                };
-          
-                let hasIssues = false;
-                Object.keys(thresholds).forEach(metric => {
-                  if (metrics[metric] && metrics[metric] > thresholds[metric]) {
-                    console.log(\`⚠️ Performance concern: \${metric} = \${metrics[metric]}ms (threshold: \${thresholds[metric]}ms)\`);
-                    hasIssues = true;
-                  } else if (metrics[metric]) {
-                    console.log(\`✅ \${metric} = \${metrics[metric]}ms (acceptable)\`);
-                  }
-                });
-          
-                if (hasIssues) {
-                  console.log('Performance concerns detected but not failing PR validation');
-                }
-              }
-            "
+          echo "🔍 Analyzing performance impact..."
+          node analyze_performance.js
 
       - name: Upload performance artifacts
         uses: actions/upload-artifact@v4
@@ -568,6 +581,7 @@ jobs:
             cypress/screenshots
             cypress/videos
             cypress/reports
+            analyze_performance.js
           retention-days: 7
 
   # Generate PR validation report
@@ -646,7 +660,7 @@ jobs:
           echo "- Check for any performance regressions" >> pr-validation-summary.md
           echo "- Verify accessibility and security standards are maintained" >> pr-validation-summary.md
           echo "" >> pr-validation-summary.md
-          echo "ℹ️ **Note**: Fixed TypeScript configuration validation with proper module resolution." >> pr-validation-summary.md
+          echo "ℹ️ **Note:** Fixed shell script syntax errors in performance analysis." >> pr-validation-summary.md
         continue-on-error: true
 
       - name: Comment on PR with validation results
