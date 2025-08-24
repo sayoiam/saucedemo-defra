@@ -74,11 +74,6 @@ npm run test:all-viewports # All viewports sequentially
 
 ### Specific Test Files
 ```bash
-# TypeScript test files
-npx cypress run --spec "cypress/e2e/accessibility.cy.ts"
-npx cypress run --spec "cypress/e2e/security.cy.ts"
-npx cypress run --spec "cypress/e2e/responsive.cy.ts"
-
 # BDD feature files
 npx cypress run --spec "cypress/e2e/features/login.feature"
 npx cypress run --spec "cypress/e2e/features/complete-purchase-flow.feature"
