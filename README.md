@@ -12,8 +12,8 @@ A comprehensive, enterprise-grade test automation framework built with Cypress, 
 ### Installation
 ```bash
 # Clone repository
-git clone https://github.com/your-org/saucedemo-cypress-framework.git
-cd saucedemo-cypress-framework
+git clone https://github.com/sayoiam/saucedemo-defra.git
+cd saucedemo-defra
 
 # Install dependencies
 npm install
