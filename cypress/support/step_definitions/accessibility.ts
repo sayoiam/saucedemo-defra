@@ -81,18 +81,6 @@ Then('tab order should be logical', () => {
   });
 });
 
-// Then('I should be able to complete a purchase using only keyboard', () => {
-//   // This would be a comprehensive keyboard-only purchase flow
-//   cy.get('[data-test^="add-to-cart"]').first().focus().type('{enter}');
-//   cy.get('.shopping_cart_link').focus().type('{enter}');
-//   cy.get('[data-test="checkout"]').focus().type('{enter}');
-//   cy.get('[data-test="firstName"]').focus().type('John');
-//   cy.get('[data-test="lastName"]').focus().type('Doe');
-//   cy.get('[data-test="postalCode"]').focus().type('12345');
-//   cy.get('[data-test="continue"]').focus().type('{enter}');
-//   cy.get('[data-test="finish"]').focus().type('{enter}');
-// });
-
 // Screen reader compatibility steps
 Then('all page content should be readable by screen readers', () => {
   // Check for proper heading structure

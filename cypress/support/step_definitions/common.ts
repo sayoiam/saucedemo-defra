@@ -91,9 +91,6 @@ Given('I logout from the application', () => {
 });
 
 // Viewport steps
-// Given('I am using a mobile viewport', () => {
-//   cy.viewport(375, 667);
-// });
 
 Given('I am using a tablet viewport', () => {
   cy.viewport(768, 1024);
@@ -129,12 +126,6 @@ Then('the application should prevent security vulnerabilities', () => {
   cy.url().should('not.contain', 'javascript:');
   cy.get('body').should('not.contain', 'XSS');
 });
-
-// Then('no script execution should occur', () => {
-//   cy.window().then((win) => {
-//     expect(win.document.scripts).to.have.length.lessThan(10); // Basic check
-//   });
-// });
 
 // Responsive steps
 When('I test the {word} page on different viewports:', (pageName: string, dataTable: any) => {

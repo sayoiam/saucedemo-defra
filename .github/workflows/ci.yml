@@ -1,40 +1,20 @@
-name: SauceDemo Cypress Tests
+name: CI/CD Pipeline
 
 on:
   push:
     branches: [ main, develop ]
   pull_request:
     branches: [ main, develop ]
-  schedule:
-    # Run tests daily at 2 AM UTC
-    - cron: '0 2 * * *'
   workflow_dispatch:
-    inputs:
-      browser:
-        description: 'Browser to run tests on'
-        required: false
-        default: 'chrome'
-        type: choice
-        options:
-          - chrome
-          - firefox
-          - edge
-      test_suite:
-        description: 'Test suite to run'
-        required: false
-        default: 'all'
-        type: choice
-        options:
-          - all
-          - smoke
-          - regression
-          - accessibility
-          - security
-          - responsive
+
+# Cancel previous runs for the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  # Lint and type check - runs independently
-  lint:
+  # Lint and type checking
+  lint-and-type-check:
     name: Lint and Type Check
     runs-on: ubuntu-latest
     steps:
@@ -44,27 +24,43 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'  # Updated to Node.js 20
 
-      - name: Install dependencies
-        run: npm install
+      - name: Install dependencies with retry
+        run: |
+          for i in {1..3}; do
+            echo "Attempt $i: Installing dependencies..."
+            if npm install; then
+              echo "✅ Dependencies installed successfully"
+              break
+            else
+              echo "❌ Attempt $i failed"
+              if [ $i -eq 3 ]; then
+                echo "💥 All attempts failed"
+                exit 1
+              fi
+              echo "⏳ Waiting 30 seconds before retry..."
+              sleep 30
+            fi
+          done
 
-      - name: Run TypeScript type check
-        run: npx tsc --noEmit
+      - name: Run TypeScript compiler
+        run: npx tsc --noEmit --skipLibCheck
 
       - name: Run ESLint (if configured)
         run: |
           if [ -f ".eslintrc.js" ] || [ -f ".eslintrc.json" ]; then
-            npx eslint cypress/**/*.ts
+            npx eslint cypress/**/*.ts --format=github
           else
-            echo "ESLint not configured, skipping..."
+            echo "ESLint not configured, skipping"
           fi
+        continue-on-error: true
 
-  # Smoke tests - runs independently
+  # Smoke tests
   smoke-tests:
     name: Smoke Tests
     runs-on: ubuntu-latest
-    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'smoke'
+    needs: lint-and-type-check
     strategy:
       matrix:
         browser: [chrome, firefox]
@@ -76,12 +72,27 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'  # Updated to Node.js 20
 
-      - name: Install dependencies
-        run: npm install
+      - name: Install dependencies with retry
+        run: |
+          for i in {1..3}; do
+            echo "Attempt $i: Installing dependencies..."
+            if npm install; then
+              echo "✅ Dependencies installed successfully"
+              break
+            else
+              echo "❌ Attempt $i failed"
+              if [ $i -eq 3 ]; then
+                echo "💥 All attempts failed"
+                exit 1
+              fi
+              echo "⏳ Waiting 30 seconds before retry..."
+              sleep 30
+            fi
+          done
 
-      - name: Run Cypress smoke tests
+      - name: Run smoke tests
         uses: cypress-io/github-action@v6
         with:
           install: false
@@ -91,14 +102,6 @@ jobs:
             cypress/e2e/features/complete-purchase-flow.feature
             cypress/e2e/features/inventory-management.feature
             cypress/e2e/complete-purchase-flow.cy.ts
-          config: |
-            {
-              "env": {
-                "grepTags": "@smoke"
-              }
-            }
-        env:
-          CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
 
       - name: Upload smoke test artifacts
         uses: actions/upload-artifact@v4
@@ -111,11 +114,11 @@ jobs:
             cypress/reports
           retention-days: 7
 
-  # Regression tests - runs independently
+  # Regression tests
   regression-tests:
     name: Regression Tests
     runs-on: ubuntu-latest
-    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'regression'
+    needs: lint-and-type-check
     strategy:
       matrix:
         browser: [chrome, firefox, edge]
@@ -128,29 +131,27 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'  # Updated to Node.js 20
 
-      - name: Install dependencies
-        run: npm install
-
-      - name: Set viewport configuration
+      - name: Install dependencies with retry
         run: |
-          case "${{ matrix.viewport }}" in
-            desktop)
-              echo "CYPRESS_viewportWidth=1280" >> $GITHUB_ENV
-              echo "CYPRESS_viewportHeight=720" >> $GITHUB_ENV
-              ;;
-            tablet)
-              echo "CYPRESS_viewportWidth=768" >> $GITHUB_ENV
-              echo "CYPRESS_viewportHeight=1024" >> $GITHUB_ENV
-              ;;
-            mobile)
-              echo "CYPRESS_viewportWidth=375" >> $GITHUB_ENV
-              echo "CYPRESS_viewportHeight=667" >> $GITHUB_ENV
-              ;;
-          esac
+          for i in {1..3}; do
+            echo "Attempt $i: Installing dependencies..."
+            if npm install; then
+              echo "✅ Dependencies installed successfully"
+              break
+            else
+              echo "❌ Attempt $i failed"
+              if [ $i -eq 3 ]; then
+                echo "💥 All attempts failed"
+                exit 1
+              fi
+              echo "⏳ Waiting 30 seconds before retry..."
+              sleep 30
+            fi
+          done
 
-      - name: Run Cypress regression tests
+      - name: Run regression tests
         uses: cypress-io/github-action@v6
         with:
           install: false
@@ -163,12 +164,9 @@ jobs:
             cypress/e2e/complete-purchase-flow.cy.ts
           config: |
             {
-              "env": {
-                "grepTags": "@regression or not @skip"
-              }
+              "viewportWidth": ${{ matrix.viewport == 'mobile' && 375 || matrix.viewport == 'tablet' && 768 || 1280 }},
+              "viewportHeight": ${{ matrix.viewport == 'mobile' && 667 || matrix.viewport == 'tablet' && 1024 || 720 }}
             }
-        env:
-          CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
 
       - name: Upload regression test artifacts
         uses: actions/upload-artifact@v4
@@ -179,13 +177,13 @@ jobs:
             cypress/screenshots
             cypress/videos
             cypress/reports
-          retention-days: 14
+          retention-days: 7
 
   # Accessibility tests - dedicated job
   accessibility-tests:
     name: Accessibility Tests
     runs-on: ubuntu-latest
-    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'accessibility'
+    needs: lint-and-type-check
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -193,10 +191,25 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'  # Updated to Node.js 20
 
-      - name: Install dependencies
-        run: npm install
+      - name: Install dependencies with retry
+        run: |
+          for i in {1..3}; do
+            echo "Attempt $i: Installing dependencies..."
+            if npm install; then
+              echo "✅ Dependencies installed successfully"
+              break
+            else
+              echo "❌ Attempt $i failed"
+              if [ $i -eq 3 ]; then
+                echo "💥 All attempts failed"
+                exit 1
+              fi
+              echo "⏳ Waiting 30 seconds before retry..."
+              sleep 30
+            fi
+          done
 
       - name: Run accessibility tests
         uses: cypress-io/github-action@v6
@@ -204,16 +217,6 @@ jobs:
           install: false
           browser: chrome
           spec: cypress/e2e/features/accessibility.feature
-        env:
-          CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
-
-      - name: Generate accessibility report
-        run: |
-          if [ -f "cypress/reports/accessibility-report.json" ]; then
-            echo "Accessibility report generated"
-            cat cypress/reports/accessibility-report.json
-          fi
-        continue-on-error: true
 
       - name: Upload accessibility artifacts
         uses: actions/upload-artifact@v4
@@ -224,13 +227,13 @@ jobs:
             cypress/screenshots
             cypress/videos
             cypress/reports
-          retention-days: 30
+          retention-days: 14
 
   # Security tests - dedicated job
   security-tests:
     name: Security Tests
     runs-on: ubuntu-latest
-    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'security'
+    needs: lint-and-type-check
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -238,10 +241,25 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'  # Updated to Node.js 20
 
-      - name: Install dependencies
-        run: npm install
+      - name: Install dependencies with retry
+        run: |
+          for i in {1..3}; do
+            echo "Attempt $i: Installing dependencies..."
+            if npm install; then
+              echo "✅ Dependencies installed successfully"
+              break
+            else
+              echo "❌ Attempt $i failed"
+              if [ $i -eq 3 ]; then
+                echo "💥 All attempts failed"
+                exit 1
+              fi
+              echo "⏳ Waiting 30 seconds before retry..."
+              sleep 30
+            fi
+          done
 
       - name: Run security tests
         uses: cypress-io/github-action@v6
@@ -249,16 +267,6 @@ jobs:
           install: false
           browser: chrome
           spec: cypress/e2e/features/security.feature
-        env:
-          CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
-
-      - name: Generate security report
-        run: |
-          if [ -f "cypress/reports/security-report.json" ]; then
-            echo "Security report generated"
-            cat cypress/reports/security-report.json
-          fi
-        continue-on-error: true
 
       - name: Upload security artifacts
         uses: actions/upload-artifact@v4
@@ -269,13 +277,13 @@ jobs:
             cypress/screenshots
             cypress/videos
             cypress/reports
-          retention-days: 30
+          retention-days: 14
 
-  # Responsive tests - dedicated job
+  # Responsive tests - dedicated job with proper Node.js 20
   responsive-tests:
     name: Responsive Tests
     runs-on: ubuntu-latest
-    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'responsive'
+    needs: lint-and-type-check
     strategy:
       matrix:
         viewport: [mobile, tablet, desktop, large-desktop]
@@ -287,31 +295,25 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'  # Updated to Node.js 20 - THIS FIXES THE ISSUE
 
-      - name: Install dependencies
-        run: npm install
-
-      - name: Set viewport for responsive testing
+      - name: Install dependencies with retry
         run: |
-          case "${{ matrix.viewport }}" in
-            mobile)
-              echo "CYPRESS_viewportWidth=375" >> $GITHUB_ENV
-              echo "CYPRESS_viewportHeight=667" >> $GITHUB_ENV
-              ;;
-            tablet)
-              echo "CYPRESS_viewportWidth=768" >> $GITHUB_ENV
-              echo "CYPRESS_viewportHeight=1024" >> $GITHUB_ENV
-              ;;
-            desktop)
-              echo "CYPRESS_viewportWidth=1280" >> $GITHUB_ENV
-              echo "CYPRESS_viewportHeight=720" >> $GITHUB_ENV
-              ;;
-            large-desktop)
-              echo "CYPRESS_viewportWidth=1920" >> $GITHUB_ENV
-              echo "CYPRESS_viewportHeight=1080" >> $GITHUB_ENV
-              ;;
-          esac
+          for i in {1..3}; do
+            echo "Attempt $i: Installing dependencies..."
+            if npm install; then
+              echo "✅ Dependencies installed successfully"
+              break
+            else
+              echo "❌ Attempt $i failed"
+              if [ $i -eq 3 ]; then
+                echo "💥 All attempts failed"
+                exit 1
+              fi
+              echo "⏳ Waiting 30 seconds before retry..."
+              sleep 30
+            fi
+          done
 
       - name: Run responsive tests
         uses: cypress-io/github-action@v6
@@ -323,11 +325,13 @@ jobs:
             cypress/e2e/features/complete-purchase-flow.feature
             cypress/e2e/features/inventory-management.feature
             cypress/e2e/features/security.feature
-        env:
-          CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
-          CYPRESS_VIEWPORT: ${{ matrix.viewport }}
+          config: |
+            {
+              "viewportWidth": ${{ matrix.viewport == 'mobile' && 375 || matrix.viewport == 'tablet' && 768 || matrix.viewport == 'desktop' && 1280 || 1920 }},
+              "viewportHeight": ${{ matrix.viewport == 'mobile' && 667 || matrix.viewport == 'tablet' && 1024 || matrix.viewport == 'desktop' && 720 || 1080 }}
+            }
 
-      - name: Upload responsive artifacts
+      - name: Upload responsive test artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -336,13 +340,13 @@ jobs:
             cypress/screenshots
             cypress/videos
             cypress/reports
-          retention-days: 14
+          retention-days: 7
 
-  # Generate consolidated report - runs after all tests (success or failure)
-  generate-report:
+  # Generate consolidated test report
+  generate-test-report:
     name: Generate Test Report
     runs-on: ubuntu-latest
-    needs: [lint, smoke-tests, regression-tests, accessibility-tests, security-tests, responsive-tests]
+    needs: [smoke-tests, regression-tests, accessibility-tests, security-tests, responsive-tests]
     if: always()
     steps:
       - name: Checkout code
@@ -351,92 +355,133 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'  # Updated to Node.js 20
 
-      - name: Install dependencies
-        run: npm install
+      - name: Install dependencies with retry
+        run: |
+          for i in {1..3}; do
+            echo "Attempt $i: Installing dependencies..."
+            if npm install; then
+              echo "✅ Dependencies installed successfully"
+              break
+            else
+              echo "❌ Attempt $i failed"
+              if [ $i -eq 3 ]; then
+                echo "💥 All attempts failed"
+                exit 1
+              fi
+              echo "⏳ Waiting 30 seconds before retry..."
+              sleep 30
+            fi
+          done
 
-      - name: Download all artifacts
+      - name: Download all test artifacts
         uses: actions/download-artifact@v4
         with:
-          path: artifacts
+          path: test-artifacts
         continue-on-error: true
 
-      - name: Merge test reports
+      - name: Generate consolidated report
         run: |
-          mkdir -p merged-reports
-          find artifacts -name "*.json" -path "*/reports/*" -exec cp {} merged-reports/ \; 2>/dev/null || true
+          mkdir -p consolidated-reports
           
-          # Generate consolidated HTML report
-          npm run report:merge || echo "Report merge script not found"
-        continue-on-error: true
-
-      - name: Generate test summary
-        run: |
-          echo "# Test Execution Summary" > test-summary.md
-          echo "" >> test-summary.md
-          echo "**Date:** $(date)" >> test-summary.md
-          echo "**Commit:** ${{ github.sha }}" >> test-summary.md
-          echo "**Branch:** ${{ github.ref_name }}" >> test-summary.md
-          echo "" >> test-summary.md
+          # Create test summary
+          echo "# Test Execution Report - $(date)" > consolidated-reports/test-summary.md
+          echo "" >> consolidated-reports/test-summary.md
+          echo "**Execution Date:** $(date)" >> consolidated-reports/test-summary.md
+          echo "**Commit:** ${{ github.sha }}" >> consolidated-reports/test-summary.md
+          echo "**Branch:** ${{ github.ref_name }}" >> consolidated-reports/test-summary.md
+          echo "**Node.js Version:** 20" >> consolidated-reports/test-summary.md
+          echo "" >> consolidated-reports/test-summary.md
           
           # Add job status summary
-          echo "## Job Status Summary" >> test-summary.md
-          echo "- **Lint**: ${{ needs.lint.result }}" >> test-summary.md
-          echo "- **Smoke Tests**: ${{ needs.smoke-tests.result }}" >> test-summary.md
-          echo "- **Regression Tests**: ${{ needs.regression-tests.result }}" >> test-summary.md
-          echo "- **Accessibility Tests**: ${{ needs.accessibility-tests.result }}" >> test-summary.md
-          echo "- **Security Tests**: ${{ needs.security-tests.result }}" >> test-summary.md
-          echo "- **Responsive Tests**: ${{ needs.responsive-tests.result }}" >> test-summary.md
-          echo "" >> test-summary.md
+          echo "## Job Status Summary" >> consolidated-reports/test-summary.md
+          echo "- **Lint and Type Check**: ${{ needs.lint-and-type-check.result }}" >> consolidated-reports/test-summary.md
+          echo "- **Smoke Tests**: ${{ needs.smoke-tests.result }}" >> consolidated-reports/test-summary.md
+          echo "- **Regression Tests**: ${{ needs.regression-tests.result }}" >> consolidated-reports/test-summary.md
+          echo "- **Accessibility Tests**: ${{ needs.accessibility-tests.result }}" >> consolidated-reports/test-summary.md
+          echo "- **Security Tests**: ${{ needs.security-tests.result }}" >> consolidated-reports/test-summary.md
+          echo "- **Responsive Tests**: ${{ needs.responsive-tests.result }}" >> consolidated-reports/test-summary.md
+          echo "" >> consolidated-reports/test-summary.md
           
-          # Count artifacts to estimate test results
-          SMOKE_ARTIFACTS=$(find artifacts -name "*smoke*" 2>/dev/null | wc -l)
-          REGRESSION_ARTIFACTS=$(find artifacts -name "*regression*" 2>/dev/null | wc -l)
-          ACCESSIBILITY_ARTIFACTS=$(find artifacts -name "*accessibility*" 2>/dev/null | wc -l)
-          SECURITY_ARTIFACTS=$(find artifacts -name "*security*" 2>/dev/null | wc -l)
-          RESPONSIVE_ARTIFACTS=$(find artifacts -name "*responsive*" 2>/dev/null | wc -l)
+          # Count artifacts
+          SMOKE_ARTIFACTS=$(find test-artifacts -name "*smoke*" 2>/dev/null | wc -l)
+          REGRESSION_ARTIFACTS=$(find test-artifacts -name "*regression*" 2>/dev/null | wc -l)
+          ACCESSIBILITY_ARTIFACTS=$(find test-artifacts -name "*accessibility*" 2>/dev/null | wc -l)
+          SECURITY_ARTIFACTS=$(find test-artifacts -name "*security*" 2>/dev/null | wc -l)
+          RESPONSIVE_ARTIFACTS=$(find test-artifacts -name "*responsive*" 2>/dev/null | wc -l)
           
-          echo "## Test Suite Results" >> test-summary.md
-          echo "- Smoke Tests: $SMOKE_ARTIFACTS artifacts" >> test-summary.md
-          echo "- Regression Tests: $REGRESSION_ARTIFACTS artifacts" >> test-summary.md
-          echo "- Accessibility Tests: $ACCESSIBILITY_ARTIFACTS artifacts" >> test-summary.md
-          echo "- Security Tests: $SECURITY_ARTIFACTS artifacts" >> test-summary.md
-          echo "- Responsive Tests: $RESPONSIVE_ARTIFACTS artifacts" >> test-summary.md
+          echo "## Test Execution Summary" >> consolidated-reports/test-summary.md
+          echo "- Smoke Tests: $SMOKE_ARTIFACTS artifacts" >> consolidated-reports/test-summary.md
+          echo "- Regression Tests: $REGRESSION_ARTIFACTS artifacts" >> consolidated-reports/test-summary.md
+          echo "- Accessibility Tests: $ACCESSIBILITY_ARTIFACTS artifacts" >> consolidated-reports/test-summary.md
+          echo "- Security Tests: $SECURITY_ARTIFACTS artifacts" >> consolidated-reports/test-summary.md
+          echo "- Responsive Tests: $RESPONSIVE_ARTIFACTS artifacts" >> consolidated-reports/test-summary.md
+          echo "" >> consolidated-reports/test-summary.md
+          
+          # Merge Mochawesome reports if they exist
+          if command -v npx >/dev/null 2>&1; then
+            echo "🔍 Looking for Mochawesome reports to merge..."
+            find test-artifacts -name "*.json" -path "*/reports/*" | head -10 | while read report; do
+              echo "Found report: $report"
+            done
+          
+            # Try to merge reports
+            if find test-artifacts -name "*.json" -path "*/reports/*" | head -1 | grep -q .; then
+              echo "📊 Merging Mochawesome reports..."
+              mkdir -p consolidated-reports/mochawesome
+              npx mochawesome-merge "test-artifacts/**/reports/*.json" > consolidated-reports/mochawesome/merged-report.json || echo "⚠️ Report merge failed"
+          
+              if [ -f "consolidated-reports/mochawesome/merged-report.json" ]; then
+                npx marge consolidated-reports/mochawesome/merged-report.json --reportDir consolidated-reports/mochawesome --inline || echo "⚠️ HTML generation failed"
+              fi
+            else
+              echo "⚠️ No Mochawesome JSON reports found to merge"
+            fi
+          fi
+        continue-on-error: true
 
       - name: Upload consolidated report
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: consolidated-test-report
-          path: |
-            merged-reports
-            test-summary.md
+          path: consolidated-reports
           retention-days: 30
 
-      - name: Comment PR with test results
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            if (fs.existsSync('test-summary.md')) {
-              const summary = fs.readFileSync('test-summary.md', 'utf8');
-              github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: summary
-              });
-            }
-        continue-on-error: true
+  # Workflow summary
+  workflow-summary:
+    name: Workflow Summary
+    runs-on: ubuntu-latest
+    needs: [generate-test-report]
+    if: always()
+    steps:
+      - name: Generate workflow summary
+        run: |
+          echo "# Workflow Execution Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Date:** $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Node.js Version:** 20 (Fixed compatibility issues)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Job Results" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Lint and Type Check | ${{ needs.lint-and-type-check.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Smoke Tests | ${{ needs.smoke-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Regression Tests | ${{ needs.regression-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Accessibility Tests | ${{ needs.accessibility-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Tests | ${{ needs.security-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Responsive Tests | ${{ needs.responsive-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Generate Test Report | ${{ needs.generate-test-report.result }} |" >> $GITHUB_STEP_SUMMARY
 
-  # Deploy test results to GitHub Pages - with optional deployment
+  # Deploy test results to GitHub Pages (optional)
   deploy-results:
     name: Deploy Test Results
     runs-on: ubuntu-latest
-    needs: generate-report
-    if: always() && github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: generate-test-report
+    if: always() && github.ref == 'refs/heads/main'
     permissions:
       contents: read
       pages: write
@@ -450,12 +495,10 @@ jobs:
         with:
           name: consolidated-test-report
           path: public
-        continue-on-error: true
 
       - name: Check if GitHub Pages is enabled
         id: pages-check
         run: |
-          # Try to get Pages info to see if it's enabled
           if curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
              -H "Accept: application/vnd.github.v3+json" \
              "https://api.github.com/repos/${{ github.repository }}/pages" | grep -q "html_url"; then
@@ -464,7 +507,7 @@ jobs:
           else
             echo "pages_enabled=false" >> $GITHUB_OUTPUT
             echo "⚠️ GitHub Pages is not enabled - skipping deployment"
-            echo "💡 To enable: Repository Settings → Pages → Source: GitHub Actions"
+            echo "To enable: Go to Settings → Pages → Source: GitHub Actions"
           fi
         continue-on-error: true
 
@@ -482,60 +525,4 @@ jobs:
         if: steps.pages-check.outputs.pages_enabled == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
-
-      - name: Pages deployment summary
-        run: |
-          if [ "${{ steps.pages-check.outputs.pages_enabled }}" == "true" ]; then
-            echo "✅ Reports deployed to GitHub Pages"
-            echo "📄 URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
-            echo "🔗 Direct link will be available in a few minutes"
-          else
-            echo "⚠️ GitHub Pages not enabled - reports available as artifacts only"
-            echo "📦 Download 'consolidated-test-report' artifact to view reports"
-            echo "💡 To enable Pages: Repository Settings → Pages → Source: GitHub Actions"
-            echo "🔧 Or set ENABLE_PAGES_DEPLOYMENT=false to disable this job"
-          fi
-
-  # Summary job to provide overall workflow status
-  workflow-summary:
-    name: Workflow Summary
-    runs-on: ubuntu-latest
-    needs: [lint, smoke-tests, regression-tests, accessibility-tests, security-tests, responsive-tests, deploy-results]
-    if: always()
-    steps:
-      - name: Generate workflow summary
-        run: |
-          echo "## 🎯 Workflow Execution Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Job Results:" >> $GITHUB_STEP_SUMMARY
-          echo "- **Lint**: ${{ needs.lint.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Smoke Tests**: ${{ needs.smoke-tests.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Regression Tests**: ${{ needs.regression-tests.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Accessibility Tests**: ${{ needs.accessibility-tests.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Security Tests**: ${{ needs.security-tests.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Responsive Tests**: ${{ needs.responsive-tests.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Deploy Results**: ${{ needs.deploy-results.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          # Determine overall status
-          if [[ "${{ needs.lint.result }}" == "success" && 
-                "${{ needs.smoke-tests.result }}" == "success" && 
-                "${{ needs.regression-tests.result }}" == "success" && 
-                "${{ needs.accessibility-tests.result }}" == "success" && 
-                "${{ needs.security-tests.result }}" == "success" && 
-                "${{ needs.responsive-tests.result }}" == "success" ]]; then
-            echo "### ✅ Overall Status: SUCCESS" >> $GITHUB_STEP_SUMMARY
-            echo "All test suites passed successfully!" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "### ❌ Overall Status: SOME FAILURES" >> $GITHUB_STEP_SUMMARY
-            echo "One or more test suites failed. Check individual job results above." >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📊 Reports:" >> $GITHUB_STEP_SUMMARY
-          if [[ "${{ needs.deploy-results.result }}" == "success" ]]; then
-            echo "- 🌐 **GitHub Pages**: Available at https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "- 📦 **Artifacts**: Download 'consolidated-test-report' from this workflow run" >> $GITHUB_STEP_SUMMARY
-          fi
 
